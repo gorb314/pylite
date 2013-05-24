@@ -1,5 +1,0 @@
-# TODO: read these from a file, say c-patterns
-# TODO: read these from a file, say c-keywords
-# TODO: make this configurable: no linenumbers, linenumbers in seperate cell, linenumbers in same cell
-# TODO: make the start linenumber configurable - we may want to focus on a previously seen piece of code
-# TODO: read this from a file, as in page.html or snippet.html
