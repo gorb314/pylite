@@ -1,0 +1,11 @@
+Install
+=======
+
+Copy src/pylite to a directory in the path
+
+Uninstall
+=========
+
+Remove the copy of pylite from the path
+
+

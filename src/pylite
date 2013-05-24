@@ -1,0 +1,119 @@
+#!/usr/bin/python
+
+import sys
+import re
+# TODO: modify "import cgi" so that both python 2.x and 3.x can be used
+import cgi
+from string import Template
+
+lines = open(sys.argv[1], "ro")
+
+NONE = 0
+
+# TODO: read these from a file, say c-patterns
+# standardise the pattern names
+INITIAL = 1
+COMMENT = 2
+STRING = 3
+DIR = 4
+patterns = [
+('ws', INITIAL, NONE, re.compile('[ \t]+')),
+('word', INITIAL, NONE, re.compile('[a-zA-Z][a-zA-Z0-9_]*')),
+('dir1', INITIAL, DIR, re.compile(r'\#.*\\$')),
+('dir2', DIR, NONE, re.compile(r'.*\\$')),
+('dir3', DIR, INITIAL, re.compile('.+')),
+('dir', INITIAL, NONE, re.compile('\#.*')),
+('num', INITIAL, NONE, re.compile('\d+[\.\d*]?')),
+('ops', INITIAL, NONE, re.compile(r'[\+\-\=\*\\\?]')),
+('brc', INITIAL, NONE, re.compile('[\<\{\[\(\)\]\}\>]')),
+('str', INITIAL, STRING, re.compile('"')),
+('str1', STRING, INITIAL, re.compile('.*"')),
+('stre', STRING, NONE, re.compile('.*')),
+('cl', INITIAL, NONE, re.compile(';')),
+('scm', INITIAL, NONE, re.compile('\/\/.*')),
+('mcm', INITIAL, COMMENT, re.compile('\/\*')),
+('mc1', COMMENT, INITIAL, re.compile('.*\*\/')),
+('mc2', COMMENT, NONE, re.compile('.*')),
+]
+
+# TODO: read these from a file, say c-keywords
+keywords = [
+'void','printf','return',
+'int',
+]
+
+STATE = INITIAL
+def tokenize(line):
+	global STATE
+	while line:
+		for tokentype, init, new, pattern in patterns:
+			if init != NONE and STATE != init:
+				continue
+			m = pattern.match(line)
+			if m:
+				yield tokentype, m.group(0)
+				line = line[m.end():]
+				if new != NONE:
+					STATE = new
+				break
+		else:
+			return
+		#else:
+		#	print "failed to match ["+line+"]"
+		#	raise "error"
+
+def process(token, tokentype):
+	if tokentype == 'ws':
+		return token
+	if tokentype == 'word' and token in keywords:
+		return "<span class='keyw' >" + cgi.escape(token) + "</span>"
+	return "<span class='" + tokentype + "'>" + cgi.escape(token) + "</span>"
+	
+code = ""
+linenr = ""
+for nr, line in enumerate(lines):
+	# TODO: make this configurable: no linenumbers, linenumbers in seperate cell, linenumbers in same cell
+	# or linenumbers toggleable (with some javascript)
+	# TODO: make the start linenumber configurable - we may want to focus on a previously seen piece of code
+	linenr +="%3i\n" % (nr+1) #<span class='ln'>%3i</span>\n" % (nr+1)
+	outline = ""#<span class='ln'>%3i</span>" % (nr+1)
+	for tokentype, token in tokenize(line):
+		outline += process(token, tokentype)
+	code += outline + "\n"
+
+# TODO: read this from a file, as in page.html or snippet.html
+output = Template("""<!DOCTYPE html>
+<html><head><style>
+.ln { display:none; width: 3em; ; text-align: right; }
+.ws {}
+.word { color: #00a; }
+.keyw { color: #a00; }
+.ops, .brc { color: #444; }
+.dir, .dir1, .dir2, .dir3 { color: #aa0; }
+.cl { color: #444; }
+.num { color: #400; }
+.scm, .mcm, .mc1, .mc2 { color: #040; font-style: italic; }
+.code { }
+.codeln  { color: #888; background-color: #ccc; }
+.codetxt { padding: 0px 5px; background-color: #eee; }
+</style></head>
+<body>
+<table class='code'><tr>
+<td class='codeln'>
+<pre>$LINENR</pre>
+</td>
+<td class='codetxt'>
+<pre>$CODE</pre>
+</td>
+</tr></table>
+</body>
+</html>""")
+print output.substitute({'LINENR': linenr, 'CODE': code})
+
+
+
+
+
+
+
+
