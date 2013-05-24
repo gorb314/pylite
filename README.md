@@ -20,8 +20,9 @@ See INSTALL
 Usage
 -----
 
-$ pylite <filename>
-	<filename> the source code file to be highlighted
+$ pylite &lt;filename&gt;
+	&lt;filename&gt; the source code file to be highlighted
+
 This will output the syntax-highlighted html to standard output.
 
 Internals
@@ -33,8 +34,8 @@ where tokens are defined using regexes.
 Lexing "states" are supported, so that mulit-line regexes can
 be performed.
 
-Output is simply <span>'ed as classes, letting the style.css
-take care of the appearance of the <pre>-formatted output.
+Output is simply &lt;span&gt;'ed as classes, letting the style.css
+take care of the appearance of the &lt;pre&gt;-formatted output.
 
 TODO
 ----
