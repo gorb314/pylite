@@ -1,0 +1,51 @@
+.ln {
+	display:none; width: 3em; ; text-align: right;
+}
+.ws {
+}
+.word {
+	color: #fff;
+}
+.keyw {
+	font-weight: bold; color: #ff9d00;
+}
+.ops, .ops1, .brc {
+	color: #fff;
+}
+.dir, .dir1, .dir2, .dir3{ 
+	color: #f5dd00;
+}
+.cl {
+	color: #fff;
+}
+.num {
+	color: #f00;
+}
+.scm, .mcm, .mc1, .mc2 {
+	color: #0088f5; font-style: italic;
+}
+.codetb {
+	border-collapse:collapse;
+}
+.codeln {
+	padding: 0.25em 0.25em;
+	color: #0065bf; background-color: #000d1a;
+}
+.codetxt {
+	padding: 0.25em 0.25em;
+	background-color: #001b33;
+}
+.capt {
+	padding: 0.25em 0px;
+	color: #fff;
+	background-color: #0088f5;
+}
+.str, .str1, .stre {
+	color: #33c206;
+}
+.err {
+	color: #fff;
+	background-color: #f00;
+}
+	
+

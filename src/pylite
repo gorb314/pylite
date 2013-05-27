@@ -1,119 +1,255 @@
 #!/usr/bin/python
 
 import sys
+import os
+
+THIS = os.path.split(sys.argv[0])[-1]
+
+PYLITEHOMEDEF = "/usr/local/share/pylite"
+PYLITEHOME = os.getenv("PYLITEHOME", PYLITEHOMEDEF)
+
+def usage(this):
+	print """\
+Usage: %s  [-e <CSS>] [-i] [-s] [-p <PAT>] [-m <MSG>] <FILENAME>
+where
+   -e <FILE>   use specified external stylesheet
+   -i          use inline styles
+   -s          output snippet
+   -p <PAT>    force usage of pattern PAT
+   -m <MSG>    display caption as "filename: MSG"
+   <FILENAME>  the file to style
+The default behaviour is to produce a full html5 webpage with embedded
+stylesheet. The pattern is by default taken from the file extension.
+By default no caption is displayed.
+The output is sent to stdout.""" % THIS
+
+import getopt
+
+# css options
+EMBED = 0
+EXTERNAL = 1
+INLINE = 2
+# output options
+PAGE = 0
+SNIP = 1
+
+# parse the args
+STYLE = EMBED
+OUTPUT = PAGE
+PATTERNDIR = os.path.join(PYLITEHOME, 'type')
+KEYWORDDIR = os.path.join(PYLITEHOME, 'type')
+CSSDIR = os.path.join(PYLITEHOME, 'css')
+PATTERN = None
+MESSAGE = None
+EXTCSS = None
+
+try:
+	opts, args = getopt.gnu_getopt(sys.argv[1:], "e:ishp:m:")
+except getopt.GetoptError as err:
+	print "%s: %s" % (THIS, str(err))
+	usage(sys.argv[0])
+	sys.exit(2)
+for o, a in opts:
+	if o == '-e':
+		STYLE = EXTERNAL
+		EXTCSS = a
+	elif o == '-i':
+		STYLE = INLINE
+	elif o == '-s':
+		OUTPUT = SNIP
+	elif o == '-p':
+		PATTERN = a
+	elif o == '-m':
+		MESSAGE = a
+	elif o == '-h':
+		usage(sys.argv)
+	else:
+		print "%s: Option error: %s %s" % (THIS, o, a)
+		usage(sys.argv[0])
+		sys.exit(2)
+
+if len(args) == 0:
+	print "%s: Missing filename" % (THIS)
+	usage(sys.argv[0])
+	sys.exit(2)
+
+# args have been parsed, run the program
+
+filename = args[0]
+
+# if not specified, autodetect the PATTERN
+if PATTERN is None:
+	ext = os.path.splitext(filename)[1]
+	extensions = {
+		# this is the list of mappings
+		# pattern <-- extensions...
+		"c": [".c", ".cc", ".C", ".cpp", ".h", ".tcc"],
+	}
+	for p, e in extensions.items():
+		if ext in e:
+			PATTERN = p
+			break
+	else:
+		# assume the default of txt
+		PATTERN = 'txt'
+
 import re
 # TODO: modify "import cgi" so that both python 2.x and 3.x can be used
 import cgi
+import math
 from string import Template
 
-lines = open(sys.argv[1], "ro")
+# DONE: read the styles from a file? from a stylesheet?
 
-NONE = 0
+if not STYLE & EXTERNAL:
+	
+	import tinycss
 
-# TODO: read these from a file, say c-patterns
-# standardise the pattern names
-INITIAL = 1
-COMMENT = 2
-STRING = 3
-DIR = 4
-patterns = [
-('ws', INITIAL, NONE, re.compile('[ \t]+')),
-('word', INITIAL, NONE, re.compile('[a-zA-Z][a-zA-Z0-9_]*')),
-('dir1', INITIAL, DIR, re.compile(r'\#.*\\$')),
-('dir2', DIR, NONE, re.compile(r'.*\\$')),
-('dir3', DIR, INITIAL, re.compile('.+')),
-('dir', INITIAL, NONE, re.compile('\#.*')),
-('num', INITIAL, NONE, re.compile('\d+[\.\d*]?')),
-('ops', INITIAL, NONE, re.compile(r'[\+\-\=\*\\\?]')),
-('brc', INITIAL, NONE, re.compile('[\<\{\[\(\)\]\}\>]')),
-('str', INITIAL, STRING, re.compile('"')),
-('str1', STRING, INITIAL, re.compile('.*"')),
-('stre', STRING, NONE, re.compile('.*')),
-('cl', INITIAL, NONE, re.compile(';')),
-('scm', INITIAL, NONE, re.compile('\/\/.*')),
-('mcm', INITIAL, COMMENT, re.compile('\/\*')),
-('mc1', COMMENT, INITIAL, re.compile('.*\*\/')),
-('mc2', COMMENT, NONE, re.compile('.*')),
-]
+	cssparser = tinycss.make_parser('page3')
+	stylesheet = cssparser.parse_stylesheet_file(os.path.join(CSSDIR, "default.css"))
+	styles = {}
+	for rule in stylesheet.rules:
+		line = ""
+		for decl in rule.declarations:
+			line += "%s:%s;" % (decl.name, decl.value.as_css())
+		for selector in rule.selector:
+			if selector.type == "IDENT":
+				v = "%s" % selector.value
+				styles.setdefault(v, "")
+				styles[v] += line
 
-# TODO: read these from a file, say c-keywords
-keywords = [
-'void','printf','return',
-'int',
-]
+# parse the file, tokenising and formatting the output
 
-STATE = INITIAL
+try:
+	lines = open(filename, "ro")
+except IOError as err:
+	print "%s: %s" % (THIS, str(err))
+	usage(THIS)
+	sys.exit(2)
+
+# DONE: read these from a file, say c-patterns
+patternfile = os.path.join(PATTERNDIR, PATTERN, 'patterns')
+patterns = []
+for line in open(patternfile, "ro").readlines():
+	v = line.strip()
+	if len(v) > 0 and v[0] != '#':
+		v = v.split(None, 3)
+		if len(v) == 4:
+			pattern = (v[0], v[1], v[2], re.compile(v[3], re.DOTALL))
+			patterns.append(pattern)
+
+# DONE: read these from a file, say c-keywords
+keywordfile = os.path.join(KEYWORDDIR, PATTERN, 'keywords')
+keywords = []
+for line in open(keywordfile, "ro").readlines():
+	v = line.strip()
+	if len(v) > 0:
+		keywords.append(v)
+
+# TODO: add some optional debug info here to help when creating patterns files
+STATE = 'INIT'
 def tokenize(line):
 	global STATE
 	while line:
 		for tokentype, init, new, pattern in patterns:
-			if init != NONE and STATE != init:
+			if init != 'NONE' and STATE != init:
 				continue
+			#debug("matching against", tokentype, init, new, pattern)
 			m = pattern.match(line)
 			if m:
+				#debug("found match", m.group(0))
 				yield tokentype, m.group(0)
+				#debug("linerest: [%s]" % line)
 				line = line[m.end():]
-				if new != NONE:
+				if new != 'NONE':
 					STATE = new
 				break
 		else:
+			#print "failed to match ["+line+"]"
+			yield 'err', line
 			return
-		#else:
-		#	print "failed to match ["+line+"]"
-		#	raise "error"
 
 def process(token, tokentype):
 	if tokentype == 'ws':
 		return token
+	#if token[-1] == '\n': token = token[:-1]
 	if tokentype == 'word' and token in keywords:
-		return "<span class='keyw' >" + cgi.escape(token) + "</span>"
-	return "<span class='" + tokentype + "'>" + cgi.escape(token) + "</span>"
-	
-code = ""
-linenr = ""
+		tokentype = 'keyw'
+	if STYLE & INLINE:
+		spec = "style='%s'" % styles[tokentype]
+	else:
+		spec = "class='%s'" % tokentype
+	return "<span %s>" % spec + cgi.escape(token) + "</span>"
+
+codearray = []
 for nr, line in enumerate(lines):
 	# TODO: make this configurable: no linenumbers, linenumbers in seperate cell, linenumbers in same cell
 	# or linenumbers toggleable (with some javascript)
 	# TODO: make the start linenumber configurable - we may want to focus on a previously seen piece of code
-	linenr +="%3i\n" % (nr+1) #<span class='ln'>%3i</span>\n" % (nr+1)
-	outline = ""#<span class='ln'>%3i</span>" % (nr+1)
-	for tokentype, token in tokenize(line):
+	outline = ""
+	for tokentype, token in tokenize(line.rstrip()):
 		outline += process(token, tokentype)
-	code += outline + "\n"
+	codearray.append(outline)
+code = "\n".join(codearray) + "\n" # add a newline for the lastline
+
+# use the total line count to calculate how much to justify the linenumbers
+lines = len(codearray)
+linew = int(math.log(lines, 10)) + 1
+linefmt = "%%%ii" % linew
+linenrarray = []
+for i in range(1, lines+1):
+	linenrarray.append("%s" % (linefmt % i))
+linenr = "\n".join(linenrarray)
+
+# done, output the results
+
+if STYLE & EXTERNAL:
+	css = "<link rel='stylesheet' href='%s' />" % EXTCSS
+else:
+	css = "<style>"
+	for key, value in styles.items():
+		css += ".%s { %s }\n" % (key, value)
+	css += "</style>"
+
+if STYLE & INLINE:
+	codeln  = "style='%s'" % styles['codeln']
+	codetxt = "style='%s'" % styles['codetxt']
+	codetb  = "style='%s'" % styles['codetb']
+	capt    = "style='%s'" % styles['capt']
+else:
+	codeln  = "class='codeln'"
+	codetxt = "class='codetxt'"
+	codetb  = "class='codetb'"
+	capt    = "class='capt'"
+
+if MESSAGE is None:
+	caption = ""
+else:
+	caption = "<caption %s>%s: %s</caption>" % (capt, filename, MESSAGE)
+
+snipout = Template("""\
+<pre><table $CODETB>
+$CAPTION
+<tr>
+<td $CODELN>$LINENR</td>
+<td $CODETXT>$CODE</td>
+</tr></table></pre>""")
+snip = snipout.substitute({'LINENR': linenr, 'CODE': code, 'CODELN': codeln, 'CODETXT': codetxt, 'CODETB': codetb, 'CAPTION': caption})
 
 # TODO: read this from a file, as in page.html or snippet.html
-output = Template("""<!DOCTYPE html>
-<html><head><style>
-.ln { display:none; width: 3em; ; text-align: right; }
-.ws {}
-.word { color: #00a; }
-.keyw { color: #a00; }
-.ops, .brc { color: #444; }
-.dir, .dir1, .dir2, .dir3 { color: #aa0; }
-.cl { color: #444; }
-.num { color: #400; }
-.scm, .mcm, .mc1, .mc2 { color: #040; font-style: italic; }
-.code { }
-.codeln  { color: #888; background-color: #ccc; }
-.codetxt { padding: 0px 5px; background-color: #eee; }
-</style></head>
+pageout = Template("""<!DOCTYPE html>
+<html><head>
+$CSS
+</head>
 <body>
-<table class='code'><tr>
-<td class='codeln'>
-<pre>$LINENR</pre>
-</td>
-<td class='codetxt'>
-<pre>$CODE</pre>
-</td>
-</tr></table>
+$SNIP
 </body>
 </html>""")
-print output.substitute({'LINENR': linenr, 'CODE': code})
+page = pageout.substitute({'SNIP': snip, 'CSS': css})
 
+if OUTPUT & SNIP:
+	print snip
+else:
+	print page
 
-
-
-
-
-
-
+sys.exit(0)

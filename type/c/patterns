@@ -1,0 +1,19 @@
+ws		INIT		NONE		[ \t]+
+word	INIT		NONE		[a-zA-Z_][a-zA-Z0-9_]*
+dir1	INIT		DIR			\#.*\\
+dir2	DIR			NONE		.*\\
+dir3	DIR			INIT		.+
+dir		INIT		NONE		\#.*
+num		INIT		NONE		\d+[\.\d*]?
+ops		INIT		NONE		[\:\,\+\-\=\*\\\?\&\^\%\!]
+ops1	INIT		NONE		\.\.\.
+brc		INIT		NONE		[\<\{\[\(\)\]\}\>]
+str		INIT		STR			"
+str1	STR			INIT		.*"
+stre	STR			NONE		.*
+cl		INIT		NONE		;
+scm		INIT		NONE		\/\/.*
+mcm		INIT		COMMENT		\/\*
+mc1		COMMENT		INIT		.*\*\/
+mc2		COMMENT		NONE		.*
+
